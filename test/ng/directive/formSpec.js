@@ -1178,6 +1178,105 @@ describe('form', function() {
   });
 });
 
+
+describe('form ngModelOptions updateOn', function() {
+
+  describe('use updateOn with a tag name', function() {
+    var scope, form;
+
+    beforeEach(inject(function($compile, $rootScope) {
+      scope = $rootScope.$new();
+
+      form = $compile(
+        '<form name="form" ng-model-options="{ updateOn : { \'blur\' : \'input\' } }">' +
+        '<input type="text" ng-model="textValue" />' +
+        '<select ng-model="selectValue"><option value="foo"></option></select>' +
+        '<input type="submit" />' +
+        '</form>')(scope);
+
+      scope.$digest();
+    }));
+
+    afterEach(function() {
+      dealoc(form);
+    });
+
+
+    it('should update inputValue on blur', function() {
+      var input = form.find('input'),
+          ctrl = input.controller('ngModel');
+
+      expect(scope['textValue']).toBeUndefined();
+
+      ctrl.$setViewValue('foo');
+      expect(scope['textValue']).toBeUndefined();
+
+      browserTrigger(input, 'blur');
+      expect(scope['textValue']).toBe('foo');
+    });
+
+
+    it('should update selectValue immediately (default behaviour)', function() {
+      var select = form.find('select'),
+          ctrl = select.controller('ngModel');
+
+      expect(scope['selectValue']).toBeUndefined();
+
+      ctrl.$setViewValue('foo');
+      expect(scope['selectValue']).toBe('foo');
+    });
+
+  });
+
+  describe('use updateOn with a tag name and a type', function() {
+    var scope, form;
+
+    beforeEach(inject(function($compile, $rootScope) {
+      scope = $rootScope.$new();
+
+      form = $compile(
+        '<form name="form" ng-model-options="{ updateOn : { \'blur\' : \'input[email]\' } }">' +
+        '<input type="email" ng-model="emailValue" />' +
+        '<input type="radio" name="radio" value="foo" ng-model="radioValue" />' +
+        '</form>')(scope);
+
+      scope.$digest();
+    }));
+
+    afterEach(function() {
+      dealoc(form);
+    });
+
+
+    it('should update emailValue on blur', function() {
+      var input = form.children().eq(0),
+          ctrl = input.controller('ngModel');
+
+      expect(scope['emailValue']).toBeUndefined();
+
+      ctrl.$setViewValue('foo@bar.baz');
+      expect(scope['emailValue']).toBeUndefined();
+
+      browserTrigger(input, 'blur');
+      expect(scope['emailValue']).toBe('foo@bar.baz');
+    });
+
+
+    it('should update radioValue immediately (default behaviour)', function() {
+      var input = form.children().eq(1),
+          ctrl = input.controller('ngModel');
+
+      expect(scope['radioValue']).toBeUndefined();
+
+      ctrl.$setViewValue('foo');
+      expect(scope['radioValue']).toBe('foo');
+    });
+
+  });
+
+});
+
+
 describe('form animations', function() {
   beforeEach(module('ngAnimateMock'));
 
