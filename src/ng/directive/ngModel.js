@@ -306,11 +306,10 @@ var NgModelController = ['$scope', '$exceptionHandler', '$attrs', '$element', '$
       return isElementMatchingTypes(ctrl.$options.updateOn[event]);
     }
 
-    // return true if the ngModel $element matches the updateOn types
+    // return true if $element matches updateOn types
     function isElementMatchingTypes(types) {
       if (isArray(types)) {
-        return elementTagName === 'input' && types.indexOf(elementTagName + '[' + elementType + ']') >= 0
-          || types.indexOf(elementTagName) >= 0;
+        return includes(types, elementTagName + '[' + elementType + ']') || includes(types, elementTagName);
       }
       return types === true;
     }
@@ -1300,9 +1299,9 @@ var ngModelDirective = ['$rootScope', function($rootScope) {
     </file>
   </example>
 
-  This one shows how to override immediate updates for `input[type="text"]`, `input[type="email"]` and
-  `textarea`. Changes for these inputs will update their model only when the control loses focus (blur
-  event). However, the `select` input will keep its default behaviour.
+  This one shows how to override immediate updates for `<input type="text">`, `<input type="email">` and
+  `<textarea>` inputs. They will update their model only when the control loses focus (blur event).
+  However, the `<select>` input will keep its default behaviour.
 
   <example name="ngModelOptions-directive-updateOn-object-blur" module="optionsExample">
     <file name="index.html">
@@ -1315,12 +1314,12 @@ var ngModelDirective = ['$rootScope', function($rootScope) {
             <input type="email" name="email" ng-model="user.email" />
           </label><br />
           <label>
-            <input type="radio" name="gender" value="M" ng-model="user.gender" />
-            M
+            <input type="radio" name="gender" value="male" ng-model="user.gender" />
+            Male
           </label><br />
           <label>
-            <input type="radio" name="gender" value="F" ng-model="user.gender" />
-            F
+            <input type="radio" name="gender" value="female" ng-model="user.gender" />
+            Female
           </label><br />
           <label>Address:
             <textarea name="address" ng-model="user.address"></textarea>

@@ -1202,7 +1202,7 @@ describe('form ngModelOptions updateOn', function() {
     });
 
 
-    it('should update inputValue on blur', function() {
+    it('should update $scope.textValue on blur', function() {
       var input = form.find('input'),
           ctrl = input.controller('ngModel');
 
