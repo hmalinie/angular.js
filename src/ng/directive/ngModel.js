@@ -247,11 +247,15 @@ var NgModelController = ['$scope', '$exceptionHandler', '$attrs', '$element', '$
       ngModelGet = parsedNgModel,
       ngModelSet = parsedNgModelAssign,
       pendingDebounce = null,
+      updateOnDefault = true,
+      elementTagName = $element[0].tagName.toLowerCase(),
+      elementType = $element[0].type,
       parserValid,
       ctrl = this;
 
   this.$$setOptions = function(options) {
     ctrl.$options = options;
+
     if (options && options.getterSetter) {
       var invokeModelGetter = $parse($attr.ngModel + '()'),
           invokeModelSetter = $parse($attr.ngModel + '($$$p)');
@@ -273,6 +277,69 @@ var NgModelController = ['$scope', '$exceptionHandler', '$attrs', '$element', '$
     } else if (!parsedNgModel.assign) {
       throw ngModelMinErr('nonassign', "Expression '{0}' is non-assignable. Element: {1}",
           $attr.ngModel, startingTag($element));
+    }
+
+    if (options && options.updateOn) {
+      updateOnDefault = ctrl.$$isUpdateOn('default');
+    }
+  };
+
+  // return true if this directive element must update its model on the given event
+  // event 'default' is corresponding to the default updating behaviour (immediate updates)
+  this.$$isUpdateOn = function(event) {
+    if (!ctrl.$options || !ctrl.$options.updateOn) {
+      return event === 'default';
+    }
+
+    if (event === 'default') {
+      if (ctrl.$options.updateOnDefault) {
+        return isMatchingSelectors(ctrl.$options.updateOnDefault);
+      } else {
+        for (var e in ctrl.$options.updateOn) {
+          if (isMatchingSelectors(ctrl.$options.updateOn[e])) {
+            return false;
+          }
+        }
+        return true;
+      }
+    } else {
+      return isMatchingSelectors(ctrl.$options.updateOn[event]);
+    }
+
+    // return true if $element matches updateOn types
+    function isMatchingSelectors(selectors) {
+      if (isArray(selectors)) {
+        var selector, tag, types;
+
+        for(var i = 0; i < selectors.length; i++) {
+          selector = selectors[i];
+
+          if(/^[a-z]+\(([a-z]+\|)*[a-z]+\)$/.test(selector)) {
+            // 'tag(type1|type2|...)' format
+            tag = selector.slice(0, selector.indexOf('('));
+            if(tag === elementTagName) {
+              types = selector.slice(tag.length + 1, selector.length - 1).split('|');
+              if(includes(types, elementType)) {
+                return true;
+              }
+            }
+          } else if(/^[a-z]+:not\(([a-z]+\|)*[a-z]+\)$/.test(selector)) {
+            // 'tag:not(type1|type2|...)' format
+            tag = selector.slice(0, selector.indexOf(':'));
+            if(tag === elementTagName) {
+              types = selector.slice(tag.length + 5, selector.length - 1).split('|');
+              if(!includes(types, elementType)) {
+                return true;
+              }
+            }
+          } else if(selector === elementTagName) {
+            // 'tag' format
+            return true;
+          }
+        }
+      }
+
+      return selectors === true;
     }
   };
 
@@ -814,7 +881,7 @@ var NgModelController = ['$scope', '$exceptionHandler', '$attrs', '$element', '$
    */
   this.$setViewValue = function(value, trigger) {
     ctrl.$viewValue = value;
-    if (!ctrl.$options || ctrl.$options.updateOnDefault) {
+    if (updateOnDefault) {
       ctrl.$$debounceViewValueCommit(trigger);
     }
   };
@@ -1112,10 +1179,19 @@ var ngModelDirective = ['$rootScope', function($rootScope) {
         },
         post: function ngModelPostLink(scope, element, attr, ctrls) {
           var modelCtrl = ctrls[0];
+
           if (modelCtrl.$options && modelCtrl.$options.updateOn) {
-            element.on(modelCtrl.$options.updateOn, function(ev) {
-              modelCtrl.$$debounceViewValueCommit(ev && ev.type);
+            var events = [];
+            forEach(Object.keys(modelCtrl.$options.updateOn), function(event) {
+              if (modelCtrl.$$isUpdateOn(event)) {
+                events.push(event);
+              }
             });
+            if (events.length) {
+              element.on(events.join(' '), function(e) {
+                modelCtrl.$$debounceViewValueCommit(e && e.type);
+              });
+            }
           }
 
           element.on('blur', function() {
@@ -1136,8 +1212,6 @@ var ngModelDirective = ['$rootScope', function($rootScope) {
 
 
 'use strict';
-
-var DEFAULT_REGEXP = /(\s+|^)default(\s+|$)/;
 
 /**
  * @ngdoc directive
@@ -1165,9 +1239,20 @@ var DEFAULT_REGEXP = /(\s+|^)default(\s+|$)/;
  * `ngModelOptions` has an effect on the element it's declared on and its descendants.
  *
  * @param {Object} ngModelOptions options to apply to the current model. Valid keys are:
- *   - `updateOn`: string specifying which event should the input be bound to. You can set several
- *     events using an space delimited list. There is a special event called `default` that
+ *   - `updateOn`:
+ *     - a string specifies which event should the input be bound to. You can set several
+ *     events using a space delimited list. There is a special event called `default` that
  *     matches the default events belonging of the control.
+ *     For example :
+ *     `<input type="text" ng-model-options="{ updateOn: 'blur' }" />`
+ *     - an object specifies which event should be bound to which input types. Not given types keep
+ *     their default behaviour (instant update of the model). You can set several
+ *     input types using a space delimited list. A type can be a tag name like `input`, `select` or
+ *     `textarea`. For `input` tag, you can be more specific providing the type between brackets :
+ *     `input[text]`, `input[radio]`, `input[checkbox]`, ... Set updateOn as an object is only useful
+ *     when ngModelOptions directive is set on a parent of a group of inputs.
+ *     For example :
+ *     `<form ng-model-options="{ updateOn: { 'blur': 'input[text] textarea' } }">`
  *   - `debounce`: integer value which contains the debounce model update value in milliseconds. A
  *     value of 0 triggers an immediate update. If an object is supplied instead, you can specify a
  *     custom value for each event. For example:
@@ -1188,7 +1273,7 @@ var DEFAULT_REGEXP = /(\s+|^)default(\s+|$)/;
   form will update the model only when the control loses focus (blur event). If `escape` key is
   pressed while the input field is focused, the value is reset to the value in the current model.
 
-  <example name="ngModelOptions-directive-blur" module="optionsExample">
+  <example name="ngModelOptions-directive-updateOn-string-blur" module="optionsExample">
     <file name="index.html">
       <div ng-controller="ExampleController">
         <form name="userForm">
@@ -1239,6 +1324,46 @@ var DEFAULT_REGEXP = /(\s+|^)default(\s+|$)/;
         other.click();
         expect(model.getText()).toEqual('John');
       });
+    </file>
+  </example>
+
+  This one shows how to override immediate updates for `<input type="text">`, `<input type="email">` and
+  `<textarea>` inputs. They will update their model only when the control loses focus (blur event).
+  However, the `<select>` input will keep its default behaviour.
+
+  <example name="ngModelOptions-directive-updateOn-object-blur" module="optionsExample">
+    <file name="index.html">
+      <div ng-controller="ExampleController">
+        <form name="form" ng-model-options="{ updateOn: { 'blur': 'input[text] input[email] textarea' } }">
+          <label>Name:
+            <input type="text" name="name" ng-model="user.name" />
+          </label><br />
+          <label>Email:
+            <input type="email" name="email" ng-model="user.email" />
+          </label><br />
+          <label>
+            <input type="radio" name="gender" value="male" ng-model="user.gender" />
+            Male
+          </label><br />
+          <label>
+            <input type="radio" name="gender" value="female" ng-model="user.gender" />
+            Female
+          </label><br />
+          <label>Address:
+            <textarea name="address" ng-model="user.address"></textarea>
+          </label><br />
+          </form>
+        <pre>user.name = <span ng-bind="user.name"></span></pre>
+        <pre>user.email = <span ng-bind="user.email"></span></pre>
+        <pre>user.gender = <span ng-bind="user.gender"></span></pre>
+        <pre>user.address = <span ng-bind="user.address"></span></pre>
+      </div>
+    </file>
+    <file name="app.js">
+      angular.module('optionsExample', [])
+        .controller('ExampleController', ['$scope', function($scope) {
+          $scope.user = {};
+        }]);
     </file>
   </example>
 
@@ -1305,17 +1430,37 @@ var ngModelOptionsDirective = function() {
     restrict: 'A',
     controller: ['$scope', '$attrs', function($scope, $attrs) {
       var that = this;
+
       this.$options = copy($scope.$eval($attrs.ngModelOptions));
-      // Allow adding/overriding bound events
+
+      // allow adding/overriding bound events
       if (isDefined(this.$options.updateOn)) {
-        this.$options.updateOnDefault = false;
-        // extract "default" pseudo-event from list of events that can trigger a model update
-        this.$options.updateOn = trim(this.$options.updateOn.replace(DEFAULT_REGEXP, function() {
-          that.$options.updateOnDefault = true;
-          return ' ';
-        }));
-      } else {
-        this.$options.updateOnDefault = true;
+
+        // if updateOn is a string, convert to an object
+        if (isString(this.$options.updateOn)) {
+          var updateOn = {};
+          forEach(toArray(this.$options.updateOn), function(event) {
+            updateOn[event] = true;
+          });
+          this.$options.updateOn = updateOn;
+        }
+
+        // convert updateOn types to arrays except if it's true
+        forEach(this.$options.updateOn, function(types, event) {
+          if (types !== true) {
+            that.$options.updateOn[event] = toArray(types);
+          }
+        });
+
+        // move updateOn.default to $options.updateOnDefault
+        if (this.$options.updateOn.default) {
+          this.$options.updateOnDefault = this.$options.updateOn.default;
+          delete this.$options.updateOn.default;
+        }
+      }
+
+      function toArray(string) {
+        return string.trim().replace(/\s\s+/g, ' ').split(' ');
       }
     }]
   };
