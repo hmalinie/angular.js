@@ -284,8 +284,8 @@ var NgModelController = ['$scope', '$exceptionHandler', '$attrs', '$element', '$
     }
   };
 
-  // return true if the directive element must update its model on the given event
-  // event 'default' is the default update behaviour
+  // return true if this directive element must update its model on the given event
+  // event 'default' is corresponding to the default updating behaviour (immediate updates)
   this.$$isUpdateOn = function(event) {
     if (!ctrl.$options || !ctrl.$options.updateOn) {
       return event === 'default';
@@ -293,25 +293,53 @@ var NgModelController = ['$scope', '$exceptionHandler', '$attrs', '$element', '$
 
     if (event === 'default') {
       if (ctrl.$options.updateOnDefault) {
-        return isElementMatchingTypes(ctrl.$options.updateOnDefault);
+        return isMatchingSelectors(ctrl.$options.updateOnDefault);
       } else {
-        for (event in ctrl.$options.updateOn) {
-          if (isElementMatchingTypes(ctrl.$options.updateOn[event])) {
+        for (var e in ctrl.$options.updateOn) {
+          if (isMatchingSelectors(ctrl.$options.updateOn[e])) {
             return false;
           }
         }
         return true;
       }
     } else {
-      return isElementMatchingTypes(ctrl.$options.updateOn[event]);
+      return isMatchingSelectors(ctrl.$options.updateOn[event]);
     }
 
     // return true if $element matches updateOn types
-    function isElementMatchingTypes(types) {
-      if (isArray(types)) {
-        return includes(types, elementTagName + '[' + elementType + ']') || includes(types, elementTagName);
+    function isMatchingSelectors(selectors) {
+      if (isArray(selectors)) {
+        var selector, tag, types;
+
+        for(var i = 0; i < selectors.length; i++) {
+          selector = selectors[i];
+
+          if(/^[a-z]+\(([a-z]+\|)*[a-z]+\)$/.test(selector)) {
+            // 'tag(type1|type2|...)' format
+            tag = selector.slice(0, selector.indexOf('('));
+            if(tag === elementTagName) {
+              types = selector.slice(tag.length + 1, selector.length - 1).split('|');
+              if(includes(types, elementType)) {
+                return true;
+              }
+            }
+          } else if(/^[a-z]+:not\(([a-z]+\|)*[a-z]+\)$/.test(selector)) {
+            // 'tag:not(type1|type2|...)' format
+            tag = selector.slice(0, selector.indexOf(':'));
+            if(tag === elementTagName) {
+              types = selector.slice(tag.length + 5, selector.length - 1).split('|');
+              if(!includes(types, elementType)) {
+                return true;
+              }
+            }
+          } else if(selector === elementTagName) {
+            // 'tag' format
+            return true;
+          }
+        }
       }
-      return types === true;
+
+      return selectors === true;
     }
   };
 

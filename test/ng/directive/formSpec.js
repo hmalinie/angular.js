@@ -1235,7 +1235,7 @@ describe('form ngModelOptions updateOn', function() {
       scope = $rootScope.$new();
 
       form = $compile(
-        '<form name="form" ng-model-options="{ updateOn : { \'blur\' : \'input[email]\' } }">' +
+        '<form name="form" ng-model-options="{ updateOn : { \'blur\' : \'input(email)\' } }">' +
         '<input type="email" ng-model="emailValue" />' +
         '<input type="radio" name="radio" value="foo" ng-model="radioValue" />' +
         '</form>')(scope);
